@@ -140,6 +140,8 @@ cyd.draw.image(100, 100, (w, h, pixels))
 | `cyd.screen.clear(color)` | Fill the whole screen. Chunked (~1 KB) so it works without PSRAM. |
 | `cyd.screen.rotation(value)` | `0`, `90`, `180`, or `270`; raises `ValueError` otherwise. Updates the panel, swaps `width`/`height`, and retargets the touch transform. Does **not** clear the screen. |
 | `cyd.screen.brightness(value)` | `0..100` percent. Uses `machine.PWM` on GPIO 21; on firmware without PWM it falls back to plain on/off (a warning is printed). |
+| `cyd.screen.invert(enabled=True)` | Toggle hardware color inversion (`INVON`/`INVOFF`). Default is inverted, which is correct for this panel; toggle if your panel shows reversed colors. |
+| `cyd.screen.offset(x=0, y=0)` | Apply a GRAM column/page address offset to all drawing. Useful if your panel shows a fixed edge line/artifact (try small values like `y=1`). |
 | `cyd.screen.width` / `cyd.screen.height` | Current logical dimensions (240×320 portrait, 320×240 landscape). |
 
 ### Touch (`cyd.touch`)

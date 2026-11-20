@@ -195,7 +195,10 @@ class _ILI9341:
 
     SWRESET = const(0x01)
     SLPOUT = const(0x11)
+    INVOFF = const(0x20)
     INVON = const(0x21)
+    VSCRDEF = const(0x33)
+    VSCRSADD = const(0x37)
     DISPLAY_OFF = const(0x28)
     DISPLAY_ON = const(0x29)
     SET_COLUMN = const(0x2A)
@@ -240,6 +243,9 @@ class _ILI9341:
             self.rotation = 0
             self.width = _PANEL_W
             self.height = _PANEL_H
+            self.x_offset = 0
+            self.y_offset = 0
+            self.inverted = True
             self._init_panel()
         except Exception:
             # Never leave an open SPI bus behind on partial init.
@@ -289,7 +295,10 @@ class _ILI9341:
         self._cmd(self.GMCTRN1, bytearray((0x00, 0x0E, 0x14, 0x03, 0x11, 0x07,
                                           0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C,
                                           0x31, 0x36, 0x0F)))
-        self._cmd(self.INVON)     # required for correct colours on this panel
+        # Reset vertical scroll: full 320-line area, no scroll offset.
+        self._cmd(self.VSCRDEF, bytearray((0x00, 0x00, 0x01, 0x40, 0x00, 0x00)))
+        self._cmd(self.VSCRSADD, bytearray((0x00, 0x00)))
+        self._cmd(self.INVON if self.inverted else self.INVOFF)
         self._cmd(self.SLPOUT)
         sleep(0.10)
         self._cmd(self.DISPLAY_ON)
@@ -305,18 +314,32 @@ class _ILI9341:
             self.width = _PANEL_H
             self.height = _PANEL_W
 
+    def set_invert(self, enabled):
+        self.inverted = bool(enabled)
+        self._cmd(self.INVON if self.inverted else self.INVOFF)
+
+    def set_offset(self, x=0, y=0):
+        self.x_offset = int(x)
+        self.y_offset = int(y)
+
     def block(self, x0, y0, x1, y1, data):
         """Write a clipped, row-major RGB565 byte buffer to the given window."""
+        ox = self.x_offset
+        oy = self.y_offset
         a = self._addr
-        a[0] = x0 >> 8
-        a[1] = x0 & 0xFF
-        a[2] = x1 >> 8
-        a[3] = x1 & 0xFF
+        cx0 = x0 + ox
+        cx1 = x1 + ox
+        cy0 = y0 + oy
+        cy1 = y1 + oy
+        a[0] = cx0 >> 8
+        a[1] = cx0 & 0xFF
+        a[2] = cx1 >> 8
+        a[3] = cx1 & 0xFF
         self._cmd(self.SET_COLUMN, a)
-        a[0] = y0 >> 8
-        a[1] = y0 & 0xFF
-        a[2] = y1 >> 8
-        a[3] = y1 & 0xFF
+        a[0] = cy0 >> 8
+        a[1] = cy0 & 0xFF
+        a[2] = cy1 >> 8
+        a[3] = cy1 & 0xFF
         self._cmd(self.SET_PAGE, a)
         self._cmd(self.WRITE_RAM, data)
 
@@ -942,6 +965,23 @@ class _Screen:
                 self._pwm.duty(value * 1023 // 100)
         elif self._pin is not None:
             self._pin.value(1 if value > 0 else 0)
+
+    def invert(self, enabled=True):
+        """Toggle display hardware color inversion (INVON/INVOFF)."""
+        self._host._require()
+        self._host._device.set_invert(enabled)
+
+    def offset(self, x=0, y=0):
+        """Set GRAM column/page address offset applied to all drawing.
+
+        Some panels show a 1-pixel edge artifact/line at a border; adjusting
+        the offset (often y=1 or y=-1) can move the active window to match
+        the physical panel. Offsets are in controller address units.
+        """
+        self._host._require()
+        _check_int("x", x)
+        _check_int("y", y)
+        self._host._device.set_offset(x, y)
 
     def _deinit_backlight(self):
         if self._pwm is not None:
