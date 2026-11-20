@@ -598,6 +598,23 @@ class _Draw:
         self._pair[0] = color >> 8
         self._pair[1] = color & 0xFF
 
+    def _repeat(self, color, count):
+        """Fill scratch with `count` RGB565 pixels and return a memoryview.
+
+        MicroPython does not support ``bytearray * int`` (unlike CPython), so
+        all repeated pixel data is built explicitly in the scratch buffer.
+        """
+        n = count * 2
+        if n > _SCRATCH:
+            n = _SCRATCH
+        hi = color >> 8
+        lo = color & 0xFF
+        buf = self._scratch
+        for i in range(0, n, 2):
+            buf[i] = hi
+            buf[i + 1] = lo
+        return self._fill_mv[:n]
+
     def _point(self, dev, x, y, color):
         if x < 0 or y < 0 or x >= dev.width or y >= dev.height:
             return
@@ -615,8 +632,7 @@ class _Draw:
             x0 = 0
         if x1 >= dev.width:
             x1 = dev.width - 1
-        self._set_pair(color)
-        dev.block(x0, y, x1, y, self._pair * (x1 - x0 + 1))
+        dev.block(x0, y, x1, y, self._repeat(color, x1 - x0 + 1))
 
     def _vline(self, dev, x, y, h, color):
         if h <= 0 or x < 0 or x >= dev.width:
@@ -629,8 +645,7 @@ class _Draw:
             y0 = 0
         if y1 >= dev.height:
             y1 = dev.height - 1
-        self._set_pair(color)
-        dev.block(x, y0, x, y1, self._pair * (y1 - y0 + 1))
+        dev.block(x, y0, x, y1, self._repeat(color, y1 - y0 + 1))
 
     def _fill(self, dev, x0, y0, x1, y1, color):
         """Clipped rectangle fill in chunks of at most _SCRATCH bytes."""
@@ -650,8 +665,7 @@ class _Draw:
         rows = _SCRATCH // (w * 2)
         if rows < 1:
             rows = 1
-        pattern = bytes((color >> 8, color & 0xFF)) * (w * rows)
-        self._scratch[:len(pattern)] = pattern
+        self._repeat(color, w * rows)
         mv = self._fill_mv
         y = y0
         while y <= y1:
