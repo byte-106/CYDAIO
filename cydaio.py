@@ -362,6 +362,9 @@ class _XPT2046:
             raise
         self._tx = bytearray(3)
         self._rx = bytearray(3)
+        # PENIRQ can be checked before sampling.  Some panels/firmware report
+        # it unreliable; touch.irq_gating(False) disables that check.
+        self.irq_enabled = True
         # Typical raw ranges for this panel; run touch.calibrate() to replace.
         self.x_min = 100
         self.x_max = 1962
@@ -408,17 +411,16 @@ class _XPT2046:
     def raw(self):
         """Return a cached raw (x, y) tuple when touched, otherwise None.
 
-        PENIRQ (GPIO 36) is active low and is the authoritative contact signal:
-        checking it first avoids treating floating X/Y readings as touches.
+        PENIRQ (GPIO 36) is active low. It is checked *before* sampling only:
+        some XPT2046 units deassert PENIRQ while a conversion is in progress,
+        so checking it again afterwards would reject genuine touches. Floating
+        coordinates are still rejected by the raw-range check below.
         """
-        if self.irq.value():  # high means no pen contact
+        if self.irq_enabled and self.irq.value():  # high means no pen contact
             self._raw_cache = None
             return None
         x = self._sample(self.GET_X)
         y = self._sample(self.GET_Y)
-        if self.irq.value():  # pen lifted during conversion
-            self._raw_cache = None
-            return None
         if self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max:
             if x != self._rx_raw or y != self._ry_raw or self._raw_cache is None:
                 self._rx_raw = x
@@ -992,6 +994,15 @@ class _Touch:
         self._host._require()
         return self._host._touch_dev.read()
 
+    def irq_gating(self, enabled=True):
+        """Enable/disable PENIRQ contact gating (enabled by default).
+
+        Disable it only if this panel's PENIRQ line is unreliable; contact is
+        then inferred from raw coordinate validity alone.
+        """
+        self._host._require()
+        self._host._touch_dev.irq_enabled = bool(enabled)
+
     def _wait(self, want_press, timeout_ms):
         drv = self._host._touch_dev
         start = ticks_ms()
@@ -1057,7 +1068,17 @@ class _Touch:
                 if not self._wait(False, 5000):
                     raise RuntimeError("cydaio: release the screen at the target")
                 if not self._wait(True, 10000):
-                    raise RuntimeError("cydaio: calibration timed out")
+                    # Some units never assert PENIRQ. Fall back to raw-range
+                    # contact detection once, then keep it for this session.
+                    if drv.irq_enabled:
+                        print("cydaio: PENIRQ never asserted; using raw-range touch detection")
+                        drv.irq_enabled = False
+                        if not self._wait(False, 2000):
+                            raise RuntimeError("cydaio: release the screen before calibrating")
+                        if not self._wait(True, 10000):
+                            raise RuntimeError("cydaio: calibration timed out")
+                    else:
+                        raise RuntimeError("cydaio: calibration timed out")
                 raw = self._average()
                 samples.append((raw[0], raw[1], target[1][0], target[1][1]))
                 if not self._wait(False, 5000):

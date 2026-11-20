@@ -147,6 +147,7 @@ cyd.draw.image(100, 100, (w, h, pixels))
 | Call | Description |
 |---|---|
 | `cyd.touch.read()` | Calibrated `(x, y)` in the **current rotation**, or `None` when not touched. |
+| `cyd.touch.irq_gating(enabled=True)` | Enable/disable PENIRQ contact gating (enabled by default). Disable only if PENIRQ is unreliable on your panel. |
 | `cyd.touch.calibrate()` | Interactive **four-point affine** calibration. First waits for the screen to be released, then draws four corner crosshairs and waits for a fresh press **and release** on each (10 s press timeout), fits a full affine transform, and erases the targets. Returns `True`. Blocking by design — do not call it from an interrupt. |
 
 Calibration lives in RAM only: it is lost on reset. The default raw ranges
@@ -158,8 +159,11 @@ scale and offset. A minimum of three samples is required by `apply_calibration()
 
 Contact is confirmed with the XPT2046 **PENIRQ** line (GPIO 36, active low)
 before any coordinates are read. This prevents "ghost" touches caused by floating
-X/Y values that happen to fall inside the raw validity range. Panel-dependent
-pressure-threshold heuristics are deliberately not used.
+X/Y values that happen to fall inside the raw validity range. PENIRQ is checked
+only before sampling, since some panels deassert it during a conversion. If your
+panel's PENIRQ is unreliable (calibration times out even while pressing), call
+`cyd.touch.irq_gating(False)` before `calibrate()` to fall back to raw-range
+contact detection.
 
 ### Current state (`cyd.current`)
 
