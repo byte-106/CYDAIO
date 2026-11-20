@@ -700,15 +700,21 @@ class _Draw:
             dev.block(x0, y, x1, y + nr - 1, mv[:w * nr * 2])
             y += nr
 
+    def _color(self, color):
+        _check_color(color)
+        if self._host.flip_colors:
+            return color ^ 0xFFFF
+        return color
+
     # -- public primitives -------------------------------------------------
 
     def pixel(self, x, y, color):
-        _check_color(color)
+        color = self._color(color)
         _check_xy(x, y)
         self._point(self._dev(), x, y, color)
 
     def line(self, x1, y1, x2, y2, color):
-        _check_color(color)
+        color = self._color(color)
         _check_xy(x1, y1)
         _check_xy(x2, y2)
         dev = self._dev()
@@ -751,7 +757,7 @@ class _Draw:
                 y += sy
 
     def rect(self, x, y, width, height, color, fill=False):
-        _check_color(color)
+        color = self._color(color)
         _check_xy(x, y)
         _check_int("width", width)
         _check_int("height", height)
@@ -773,7 +779,7 @@ class _Draw:
         which is wasteful (or unusable) for huge radii and circles whose arc
         never enters the viewport.  This walk is bounded by the panel height.
         """
-        _check_color(color)
+        color = self._color(color)
         _check_xy(x, y)
         _check_int("radius", radius)
         if radius <= 0:
@@ -829,13 +835,16 @@ class _Draw:
 
     def text(self, x, y, text, color, size=1):
         """Draw text with the built-in 8x8 font, scaled by integer size (1-8)."""
-        _check_color(color)
+        color = self._color(color)
         _check_xy(x, y)
         if not isinstance(size, int) or size < 1 or size > 8:
             raise ValueError("size must be an integer in 1..8")
         dev = self._dev()
         hi = color >> 8
         lo = color & 0xFF
+        bg = 0xFFFF if self._host.flip_colors else 0x0000
+        bghi = bg >> 8
+        bglo = bg & 0xFF
         glyph = self._glyph
         rowbuf = self._text_row
         mv = self._text_mv
@@ -856,8 +865,8 @@ class _Draw:
                             rowbuf[bi] = hi
                             rowbuf[bi + 1] = lo
                         else:
-                            rowbuf[bi] = 0
-                            rowbuf[bi + 1] = 0
+                            rowbuf[bi] = bghi
+                            rowbuf[bi + 1] = bglo
                         bi += 2
                 for sy in range(size):
                     py = y + gy * size + sy
@@ -914,9 +923,19 @@ class _Draw:
         row_bytes = w * 2
         left = (x0 - x) * 2
         n = (x1 - x0 + 1) * 2
-        for dy in range(y0, y1 + 1):
-            off = (dy - y) * row_bytes + left
-            dev.block(x0, dy, x1, dy, mv[off:off + n])
+        if self._host.flip_colors:
+            scratch = self._scratch
+            out = self._fill_mv[:n]
+            for dy in range(y0, y1 + 1):
+                off = (dy - y) * row_bytes + left
+                src = mv[off:off + n]
+                for i in range(n):
+                    scratch[i] = src[i] ^ 0xFF
+                dev.block(x0, dy, x1, dy, out)
+        else:
+            for dy in range(y0, y1 + 1):
+                off = (dy - y) * row_bytes + left
+                dev.block(x0, dy, x1, dy, mv[off:off + n])
 
 
 # ---------------------------------------------------------------------------
@@ -941,7 +960,7 @@ class _Screen:
         return self._host._device.height
 
     def clear(self, color):
-        _check_color(color)
+        color = self._host.draw._color(color)
         host = self._host
         host._require()
         dev = host._device
@@ -982,6 +1001,14 @@ class _Screen:
         _check_int("x", x)
         _check_int("y", y)
         self._host._device.set_offset(x, y)
+
+    def flip_colors(self, enabled=True):
+        """Enable/disable automatic software color reversal for drawing.
+
+        Enabled by default: all colors passed to draw/screen operations are
+        bitwise-inverted (RGB565). Disable to use original color values.
+        """
+        self._host.flip_colors = bool(enabled)
 
     def _deinit_backlight(self):
         if self._pwm is not None:
@@ -1156,6 +1183,7 @@ class CYDAIO:
         self._initialized = False
         self._device = None
         self._touch_dev = None
+        self.flip_colors = True  # reverse/flip drawn colors by default
         self.draw = _Draw(self)
         self.screen = _Screen(self)
         self.touch = _Touch(self)
@@ -1185,8 +1213,14 @@ class CYDAIO:
         state.y = None
         self._initialized = False
 
-    def init(self):
-        """Configure display, backlight and touch.  Safe to call repeatedly."""
+    def init(self, flip_colors=True):
+        """Configure display, backlight and touch.  Safe to call repeatedly.
+
+        ``flip_colors`` reverses/flips all drawing colors by default; pass
+        ``False`` (or call ``cyd.screen.flip_colors(False)``) to get the
+        original RGB565 color values.
+        """
+        self.flip_colors = bool(flip_colors)
         if self._initialized:
             return self
         try:

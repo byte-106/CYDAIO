@@ -77,7 +77,7 @@ while True:
 
 | Call | Description |
 |---|---|
-| `cyd.init()` | Initialises everything. Idempotent; returns the interface object. Raises `RuntimeError` with a clear message on hardware failure. |
+| `cyd.init(flip_colors=True)` | Initialises everything. By default all drawing colors are reversed/flipped (software RGB565 inversion); pass `flip_colors=False` for original color values. Idempotent; returns the interface object. Raises `RuntimeError` with a clear message on hardware failure. |
 | `cyd.deinit()` | Turns the backlight and display off, deinitialises both SPI buses and PWM, and clears `cyd.current`. Idempotent; `init()` can be called again afterwards. |
 | `cyd.update()` | Polls the touch controller once and updates `cyd.current`. Non-blocking, no display writes. |
 
@@ -92,10 +92,15 @@ Calling any drawing, screen, or touch method before `init()` raises `RuntimeErro
 `ValueError` outside that range). It is exposed at module level and also as a
 method on the object returned by `cyd.init()`.
 
-**Color inversion:** this panel requires inversion **on the display**, so the
-library sends `INVON` and sets the ILI9341 `BGR` bit in `MADCTL`. `rgb()` therefore
-returns ordinary RGB565 values and they appear correct on screen. Standard RGB
-colors are not manually inverted in software.
+**Color inversion:** this panel requires hardware inversion (`INVON`) plus the
+ILI9341 `BGR` bit in `MADCTL`, which the library configures automatically.
+`cyd.screen.invert()` controls that hardware setting.
+
+**Color flipping (software):** by default the library reverses/flips all drawing
+colors (bitwise RGB565 inversion) for convenience. Use
+`cyd.init(flip_colors=False)` or `cyd.screen.flip_colors(False)` to disable this
+and get the original RGB565 color values. `rgb()` always returns standard RGB565
+values; flipping is applied when colors are drawn/cleared.
 
 ### Drawing (`cyd.draw`)
 
@@ -140,7 +145,8 @@ cyd.draw.image(100, 100, (w, h, pixels))
 | `cyd.screen.clear(color)` | Fill the whole screen. Chunked (~1 KB) so it works without PSRAM. |
 | `cyd.screen.rotation(value)` | `0`, `90`, `180`, or `270`; raises `ValueError` otherwise. Updates the panel, swaps `width`/`height`, and retargets the touch transform. Does **not** clear the screen. |
 | `cyd.screen.brightness(value)` | `0..100` percent. Uses `machine.PWM` on GPIO 21; on firmware without PWM it falls back to plain on/off (a warning is printed). |
-| `cyd.screen.invert(enabled=True)` | Toggle hardware color inversion (`INVON`/`INVOFF`). Default is inverted, which is correct for this panel; toggle if your panel shows reversed colors. |
+| `cyd.screen.invert(enabled=True)` | Toggle hardware color inversion (`INVON`/`INVOFF`). Default is on, which is correct for this panel; toggle if your panel shows reversed colors at the hardware level. |
+| `cyd.screen.flip_colors(enabled=True)` | Enable/disable automatic software color reversal for all drawing/clear operations. Enabled by default; disable to get original RGB565 colors. |
 | `cyd.screen.offset(x=0, y=0)` | Apply a GRAM column/page address offset to all drawing. Useful if your panel shows a fixed edge line/artifact (try small values like `y=1`). |
 | `cyd.screen.width` / `cyd.screen.height` | Current logical dimensions (240×320 portrait, 320×240 landscape). |
 
