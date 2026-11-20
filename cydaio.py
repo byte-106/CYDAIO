@@ -331,14 +331,22 @@ class _ILI9341:
         cx1 = x1 + ox
         cy0 = y0 + oy
         cy1 = y1 + oy
-        a[0] = cx0 >> 8
+        if cx0 < 0:
+            cx0 = 0
+        if cx1 < 0:
+            cx1 = 0
+        if cy0 < 0:
+            cy0 = 0
+        if cy1 < 0:
+            cy1 = 0
+        a[0] = (cx0 >> 8) & 0xFF
         a[1] = cx0 & 0xFF
-        a[2] = cx1 >> 8
+        a[2] = (cx1 >> 8) & 0xFF
         a[3] = cx1 & 0xFF
         self._cmd(self.SET_COLUMN, a)
-        a[0] = cy0 >> 8
+        a[0] = (cy0 >> 8) & 0xFF
         a[1] = cy0 & 0xFF
-        a[2] = cy1 >> 8
+        a[2] = (cy1 >> 8) & 0xFF
         a[3] = cy1 & 0xFF
         self._cmd(self.SET_PAGE, a)
         self._cmd(self.WRITE_RAM, data)
