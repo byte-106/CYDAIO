@@ -242,9 +242,11 @@ Ready-to-copy scripts are in [`examples/`](examples/):
 - The panel needs `INVON` plus the `BGR` bit in `MADCTL` for correct colors; this
   is configured automatically and re-applied on every rotation change.
 - Rotation mappings are centralized in `_XPT2046.to_native()` / `to_logical()`.
-  Without calibration, raw axes are assumed to map to the native 240×320 portrait
-  orientation. Running `cyd.touch.calibrate()` fits an affine map that can
-  correct swapped and mirrored axes, offset, scale and mild skew.
+  Without calibration, the default raw-to-native mapping swaps X/Y and inverts
+  raw X to match the common ESP32-2432S028R 2USB XPT2046 mounting. Running
+  `cyd.touch.calibrate()` fits an affine map that can correct swapped/mirrored
+  axes, offset, scale and mild skew — and is still recommended if your panel
+  differs.
 - Raw calibration defaults vary between panels; `cyd.touch.calibrate()` should
   be run once after boot on each unit. The fit is kept in RAM only.
 

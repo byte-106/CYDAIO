@@ -502,13 +502,20 @@ class _XPT2046:
         return out
 
     def _native_from_raw(self, rx, ry, out=None):
-        """Raw -> native portrait coordinates; ``out`` optional."""
+        """Raw -> native portrait coordinates; ``out`` optional.
+
+        The uncalibrated default accounts for the common ESP32-2432S028R 2USB
+        XPT2046 mounting, where touch axes are swapped and the raw X axis is
+        inverted relative to the native 240x320 portrait display.  A 4-point
+        ``apply_calibration()`` fit overrides this with a full affine map.
+        """
         if self.calibrated:
             nx = self.ax * rx + self.bx * ry + self.cx
             ny = self.ay * rx + self.by * ry + self.cy
         else:
-            nx = (rx - self.x_min) * (_PANEL_W - 1) / (self.x_max - self.x_min)
-            ny = (ry - self.y_min) * (_PANEL_H - 1) / (self.y_max - self.y_min)
+            # Swap axes + invert raw X for the common CYD touch orientation.
+            nx = (ry - self.y_min) * (_PANEL_W - 1) / (self.y_max - self.y_min)
+            ny = (self.x_max - rx) * (_PANEL_H - 1) / (self.x_max - self.x_min)
         if nx < 0:
             nx = 0
         elif nx > _PANEL_W - 1:
