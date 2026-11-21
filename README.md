@@ -115,7 +115,7 @@ be an integer in `0..65535`.
 | `cyd.draw.line(x1, y1, x2, y2, color)` | Bresenham line; clipped to the viewport before rasterising, so even wildly off-screen endpoints cost at most one screen-crossing worth of work. Horizontal/vertical lines use single SPI blocks. |
 | `cyd.draw.rect(x, y, width, height, color, fill=False)` | Outline or filled rectangle. Non-positive width/height draws nothing. |
 | `cyd.draw.circle(x, y, radius, color, fill=False)` | Scanline circle, outline or filled. Work is bounded by the visible panel height: circles entirely off-screen, or so large that the screen lies inside them, are rejected immediately, and huge partially visible circles cost at most a few hundred row steps. |
-| `cyd.draw.text(x, y, text, color, size=1)` | Built-in 8×8 font scaled by integer `size` (`1..8`); background is black. Characters outside the built-in font are skipped. |
+| `cyd.draw.text(x, y, text, color, size=1)` | Built-in 8×8 font scaled by integer `size` (`1..8`); background pixels are drawn as black (or its flipped equivalent when `flip_colors` is enabled). Characters outside the built-in font are skipped. |
 | `cyd.draw.image(x, y, image_data)` | Blit a raw image. See format below. |
 
 `image_data` must be a 3-tuple:
@@ -329,7 +329,8 @@ for level in range(100, -1, -10):
   before use (a white screen is the usual symptom of the wrong driver).
 - Touch calibration is not persisted; there are no configuration files by design.
 - The built-in text renderer is a fixed 8×8 bitmap font with integer scaling only,
-  and always draws a black background behind glyphs.
+  and always draws an opaque background behind glyphs (black, or white when
+  `flip_colors` is enabled).
 - Drawing is immediate-mode: there is no framebuffer, no double buffering, and no
   anti-aliasing. Fast-moving graphics may show tearing.
 - `update()` polls raw coordinates without averaging or debouncing; applications
