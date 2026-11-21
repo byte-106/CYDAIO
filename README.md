@@ -1,5 +1,7 @@
 # CYDAIO 🟡
 
+![CYDAIO running on an ESP32-2432S028R Cheap Yellow Display](images/cyd.jpg)
+
 **Cheap Yellow Display, All In One.**
 
 One file. One import. Draw stuff on your CYD.
